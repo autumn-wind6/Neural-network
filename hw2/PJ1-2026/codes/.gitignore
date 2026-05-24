@@ -1,7 +1,7 @@
 __pycache__
 best_models
-dataset
-figs
+dataset/
+figs/
 saved_models
 data_explore.ipynb
 experiment_summary.md
