@@ -1,0 +1,16 @@
+{
+  "run_name": "cnn_dropout",
+  "model": "CNN",
+  "experiment": "dropout",
+  "best_dev_accuracy": 0.9721,
+  "test_accuracy": 0.9738,
+  "test_loss": 0.0936632774870796,
+  "epochs": 5,
+  "batch_size": 64,
+  "learning_rate": 0.05,
+  "hidden_dim": null,
+  "conv_channels": 8,
+  "dropout_rate": 0.3,
+  "model_path": "best_models\\cnn_dropout\\best_model.pickle",
+  "learning_curve": "best_models\\cnn_dropout\\learning_curve.png"
+}
