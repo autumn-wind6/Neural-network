@@ -1,0 +1,23 @@
+# Ignore assignment/source files that should not be included in the code repo.
+*.bib
+*.lyx
+project_2_2026.pdf
+pic/
+
+# Python caches and generated training artifacts.
+__pycache__/
+*.py[cod]
+codes/VGG_BatchNorm/reports/
+codes/VGG_BatchNorm/*.pt
+codes/VGG_BatchNorm/*.pth
+codes/VGG_BatchNorm/data/cifar-10-python.tar.gz
+codes/VGG_BatchNorm/data/cifar-10-batches-py/
+
+# LaTeX build artifacts.
+*.aux
+*.log
+*.out
+*.toc
+*.synctex.gz
+*.fls
+*.fdb_latexmk

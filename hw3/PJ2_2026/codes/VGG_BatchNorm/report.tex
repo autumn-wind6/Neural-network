@@ -1,0 +1,246 @@
+\documentclass[12pt]{article}
+
+\usepackage[a4paper,margin=1in]{geometry}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{float}
+\usepackage{amsmath}
+\usepackage{array}
+\usepackage{xurl}
+\usepackage[colorlinks=true,linkcolor=blue,urlcolor=blue,citecolor=blue]{hyperref}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{enumitem}
+
+\graphicspath{{./}}
+\setlist[itemize]{leftmargin=1.5em}
+\setlist[enumerate]{leftmargin=1.5em}
+
+\title{Project 2: CIFAR-10 Classification and Batch Normalization Analysis}
+\author{Chenglin Yan\\Student ID: 23307110060}
+\date{}
+
+\begin{document}
+\maketitle
+
+\noindent\textbf{Code Repository:} \url{https://github.com/autumn-wind6/Neural-network/tree/main/hw3/PJ2_2026/codes/VGG_BatchNorm}\\
+\textbf{Dataset:} \url{https://www.cs.toronto.edu/~kriz/cifar.html}\\
+\textbf{Model Weights:} \url{TODO-upload-trained-model-weights-before-submission}
+
+\begin{abstract}
+This project studies image classification on CIFAR-10 and the optimization effect of Batch Normalization. For the main CIFAR-10 task, I implemented a custom residual convolutional network containing all required components: fully-connected layers, 2D convolution, 2D pooling, and nonlinear activations. The model also includes Batch Normalization, Dropout, and residual connections. To satisfy the optimizer requirement, I implemented a full-model AdamW optimizer manually and trained the main model without using \texttt{torch.optim}. The best main-model result reaches 85.39\% test accuracy, corresponding to a 14.61\% test error. In the ablation suite, the wider-filter model obtains the best result, 87.34\% test accuracy and 12.66\% test error. For the Batch Normalization task, I implemented VGG-A with BatchNorm and compared it with the original VGG-A under four learning rates. The BN model consistently improves validation accuracy and produces a smoother loss envelope and smaller maximum gradient change, supporting the conclusion that BN stabilizes optimization.
+\end{abstract}
+
+\section{Dataset and Experimental Setup}
+
+The experiments use CIFAR-10, which contains 60,000 color images of size $32\times32$ from 10 classes. I used the official split: 50,000 training images and 10,000 test images. Images are normalized with mean $(0.5,0.5,0.5)$ and standard deviation $(0.5,0.5,0.5)$. For the main CNN experiments, random crop and random horizontal flip are used for training augmentation.
+
+\begin{table}[H]
+\centering
+\caption{Main experiment settings.}
+\begin{tabular}{llllll}
+\toprule
+Experiment & Epochs & Batch size & Optimizer & Learning rate & Dataset split \\
+\midrule
+Residual CNN & 30 & 128 & Manual AdamW & $10^{-3}$ & full CIFAR-10 \\
+Ablation suite & 30 & 128 & Manual AdamW & $10^{-3}$ & full CIFAR-10 \\
+VGG-A BN study & 10 & 128 & Manual AdamW & varied & 4096 train / 1024 val \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+All reported test errors are computed as $1-\text{accuracy}$ on the CIFAR-10 test split for the main experiments. The VGG-A BatchNorm study uses a smaller subset because the goal of that part is to compare optimization behavior under multiple learning rates.
+
+\section{Main CIFAR-10 Network}
+
+\subsection{Architecture}
+
+The main model is \texttt{ResidualCifarNet}. It is a compact residual CNN with the following structure:
+
+\begin{center}
+\texttt{Conv-BN-ReLU-MaxPool -> Residual Blocks -> AdaptiveAvgPool -> Dropout -> FC}
+\end{center}
+
+Each residual block has the form:
+
+\begin{center}
+\texttt{Conv-BN-Activation-Dropout-Conv-BN + Shortcut -> Activation}
+\end{center}
+
+This architecture satisfies all required network components in the project PDF:
+
+\begin{itemize}
+    \item fully-connected layer;
+    \item 2D convolutional layer;
+    \item 2D pooling layer;
+    \item activation functions.
+\end{itemize}
+
+It also includes all three enhanced components selected for this project:
+
+\begin{itemize}
+    \item Batch Normalization;
+    \item Dropout;
+    \item Residual Connection.
+\end{itemize}
+
+The baseline main model uses 696,618 trainable parameters.
+
+\subsection{Manual AdamW Optimizer}
+
+Instead of using \texttt{torch.optim} for the main model, I implemented \texttt{ManualAdamW}. The optimizer receives all trainable parameters of the full model and performs parameter updates manually. For gradient $g_t$, the first and second moments are updated as
+
+\[
+m_t=\beta_1m_{t-1}+(1-\beta_1)g_t,
+\qquad
+v_t=\beta_2v_{t-1}+(1-\beta_2)g_t^2.
+\]
+
+The bias-corrected estimates are
+
+\[
+\hat{m}_t=\frac{m_t}{1-\beta_1^t},
+\qquad
+\hat{v}_t=\frac{v_t}{1-\beta_2^t}.
+\]
+
+AdamW decouples weight decay from the gradient update:
+
+\[
+\theta_t \leftarrow \theta_{t-1}(1-\eta\lambda)
+-\eta \frac{\hat{m}_t}{\sqrt{\hat{v}_t}+\epsilon}.
+\]
+
+A sanity check compares this implementation against \texttt{torch.optim.AdamW} on a small neural network. The maximum parameter difference after several steps is $0.000\times10^0$, confirming that the manual update is numerically consistent with PyTorch's AdamW behavior in this setting.
+
+\section{CIFAR-10 Results}
+
+\subsection{Main Model Result}
+
+\begin{table}[H]
+\centering
+\caption{Main residual CNN result on CIFAR-10.}
+\begin{tabular}{lrrrrrr}
+\toprule
+Model & Params & Epochs & Best epoch & Test accuracy & Test error & Dropout \\
+\midrule
+ResidualCifarNet & 696,618 & 30 & 30 & 85.39\% & 14.61\% & 0.20 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The training and testing curves are shown in Figure~\ref{fig:main-curves}. The model continues improving until the last epoch, and the final best test accuracy is 85.39\%.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\linewidth]{reports/residual_cifar/training_curves.png}
+\caption{Training and test curves of the main residual CNN.}
+\label{fig:main-curves}
+\end{figure}
+
+\subsection{Visualization and Error Analysis}
+
+Figure~\ref{fig:confusion} shows the confusion matrix on CIFAR-10. Figure~\ref{fig:filters} visualizes the first-layer convolution filters. These visualizations help inspect both the classification behavior and the low-level features learned by the network.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.75\linewidth]{reports/residual_cifar/confusion_matrix.png}
+\caption{Confusion matrix of the main residual CNN.}
+\label{fig:confusion}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.75\linewidth]{reports/residual_cifar/first_layer_filters.png}
+\caption{First-layer convolution filters of the main residual CNN.}
+\label{fig:filters}
+\end{figure}
+
+\subsection{Ablation Study}
+
+The project PDF requires trying different numbers of filters, different loss functions or regularization settings, and different activation functions. I designed six experiments for this purpose. The loss-function comparison includes standard cross entropy, label-smoothed cross entropy, focal loss, and MSE loss between softmax probabilities and one-hot labels.
+
+\begin{table}[H]
+\centering
+\caption{Ablation results on CIFAR-10.}
+\begin{tabular}{llrrrrr}
+\toprule
+Experiment & Loss & Base ch. & Dropout & Label smoothing & Test acc. & Test error \\
+\midrule
+Baseline & CE & 32 & 0.20 & 0.00 & 85.39\% & 14.61\% \\
+Wider filters & CE & 48 & 0.20 & 0.00 & 87.34\% & 12.66\% \\
+GELU activation & CE & 32 & 0.20 & 0.00 & 86.48\% & 13.52\% \\
+Strong regularization & label-smoothed CE & 32 & 0.35 & 0.10 & 83.32\% & 16.68\% \\
+Focal loss & focal loss & 32 & 0.20 & 0.00 & 84.40\% & 15.60\% \\
+MSE loss & MSE & 32 & 0.20 & 0.00 & 84.04\% & 15.96\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The wider-filter model achieves the best result, improving the test accuracy from 85.39\% to 87.34\%. This suggests that the baseline residual CNN benefits from increased channel capacity. Replacing ReLU with GELU also improves accuracy to 86.48\%, indicating that smoother activations are helpful in this setting. Stronger regularization reduces accuracy to 83.32\%, which suggests that dropout 0.35 and label smoothing 0.10 may be too strong for this model and training length. Focal loss reaches 84.40\% accuracy, while MSE loss reaches 84.04\%. Both alternative loss functions train successfully, but in this setting they do not outperform standard cross entropy.
+
+\section{Batch Normalization Study}
+
+\subsection{VGG-A With and Without BatchNorm}
+
+For the BatchNorm part, I implemented \texttt{VGG\_A\_BatchNorm} by adding Batch Normalization after each convolutional layer in VGG-A. The experiment compares VGG-A and VGG-A+BN under the learning rates required by the project:
+
+\[
+[10^{-3},\;2\times10^{-3},\;10^{-4},\;5\times10^{-4}].
+\]
+
+\begin{table}[H]
+\centering
+\caption{VGG-A vs VGG-A+BN validation accuracy.}
+\begin{tabular}{lrrr}
+\toprule
+Learning rate & VGG-A acc. & VGG-A+BN acc. & Improvement \\
+\midrule
+$10^{-3}$ & 40.92\% & 52.73\% & +11.82\% \\
+$2\times10^{-3}$ & 9.77\% & 30.76\% & +20.99\% \\
+$10^{-4}$ & 40.92\% & 56.25\% & +15.33\% \\
+$5\times10^{-4}$ & 46.09\% & 58.89\% & +12.79\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Batch Normalization improves validation accuracy for every tested learning rate. The improvement is especially clear at $2\times10^{-3}$, where the non-BN model becomes unstable and remains close to random prediction, while the BN model still learns meaningful representations.
+
+\subsection{Loss Landscape}
+
+Following the project requirement, I recorded the loss at each training step for all learning rates. For each step, I computed the maximum and minimum loss across learning rates, forming \texttt{max\_curve} and \texttt{min\_curve}. The area between them is visualized with \texttt{fill\_between}.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\linewidth]{reports/vgg_bn/loss_landscape_bn_vs_no_bn.png}
+\caption{Loss landscape envelope comparison of VGG-A and VGG-A+BN.}
+\label{fig:loss-landscape}
+\end{figure}
+
+The BN envelope is generally more controlled than the non-BN envelope. This supports the common explanation that BatchNorm reparameterizes the optimization problem and makes the local loss landscape smoother.
+
+\subsection{Gradient Behavior}
+
+I also recorded gradient norms during training. The maximum gradient-norm change is 19.2544 for VGG-A and 12.4745 for VGG-A+BN. The smaller maximum gradient change in the BN model suggests that BN reduces abrupt gradient variation and helps stabilize first-order optimization.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\linewidth]{reports/vgg_bn/gradient_norms_bn_vs_no_bn.png}
+\caption{Gradient norm comparison between VGG-A and VGG-A+BN.}
+\label{fig:grad-norms}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\linewidth]{reports/vgg_bn/gradient_changes_bn_vs_no_bn.png}
+\caption{Gradient change comparison between VGG-A and VGG-A+BN.}
+\label{fig:grad-changes}
+\end{figure}
+
+\section{Conclusion}
+
+This project completed the CIFAR-10 classification task and the Batch Normalization analysis required by the PDF. The main residual CNN includes convolution, pooling, activation, fully-connected layers, BatchNorm, Dropout, and residual connections. It is trained with a self-implemented AdamW optimizer for the full model. The baseline main model reaches 85.39\% test accuracy, and the wider-filter ablation improves the result to 87.34\%.
+
+The BatchNorm experiments show that VGG-A+BN consistently outperforms VGG-A under all tested learning rates. The loss landscape and gradient analysis further indicate that BN smooths the optimization process and reduces gradient instability. Overall, the experiments support the conclusion that BatchNorm is not only useful for improving accuracy, but also for making deep-network optimization more stable.
+
+\end{document}
