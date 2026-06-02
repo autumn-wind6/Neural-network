@@ -1,0 +1,20 @@
+__pycache__/
+*.py[cod]
+reports/
+*.pt
+*.pth
+data/cifar-10-python.tar.gz
+data/cifar-10-batches-py/
+*.aux
+*.log
+*.out
+*.toc
+*.synctex.gz
+*.fls
+*.fdb_latexmk
+*.bib
+*.lyx
+
+# LaTeX report artifacts
+report.pdf
+report.synctex*
